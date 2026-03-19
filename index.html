@@ -80,7 +80,6 @@
     .history-date { color: #888; font-size: 11px; }
     .history-val { font-weight: bold; font-size: 15px; color: #e0e0e0; }
     
-    /* Nova label para tags de recorrencia */
     .tag-recorrente { font-size: 10px; background: rgba(52, 152, 219, 0.2); color: #3498db; padding: 2px 6px; border-radius: 4px; margin-left: 5px; font-weight: bold; }
 
     .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 10px; text-align: center; color: #666; gap: 10px; }
@@ -91,7 +90,6 @@
     input.app-input:focus, select.app-input:focus { outline: none; border-color: #3498db; }
     label.app-label { font-size: 13px; color: #aaa; margin-bottom: 5px; display: block; font-weight: bold; }
     
-    /* Estilo para Checkbox */
     .checkbox-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; background: #2a2a2a; padding: 12px; border-radius: 10px; border: 1px solid #333; }
     .checkbox-wrapper input[type="checkbox"] { width: 18px; height: 18px; accent-color: #3498db; }
     .checkbox-wrapper label { margin: 0; font-size: 14px; color: #fff; cursor: pointer; }
@@ -429,7 +427,7 @@
 
           } else {
             loadingOverlay.style.display = 'none';
-            document.getElementById('setup-income').value = 4843.00;
+            document.getElementById('setup-income').value = ""; // Limpo para novos usuários
             showScreen('screen-setup');
           }
         } catch (erro) {
@@ -465,7 +463,7 @@
       tempPass = pass;
       isCreatingAccountFlow = true;
       document.getElementById('login-msg').innerText = "";
-      document.getElementById('setup-income').value = 4843.00;
+      document.getElementById('setup-income').value = ""; // Limpo para novos usuários
       showScreen('screen-setup');
     });
 
@@ -528,7 +526,6 @@
       updateUI();
     }
 
-    // --- LÓGICA DE INTERFACE DE RECORRÊNCIA ---
     function setupRecurringListeners(prefix = '') {
       const chk = document.getElementById(`${prefix}is-recurring`);
       const opts = document.getElementById(`${prefix}recurring-options`);
@@ -549,7 +546,6 @@
     setupRecurringListeners('');
     setupRecurringListeners('edit-');
 
-    // --- SALVAR NOVO GASTO ---
     document.getElementById('expense-form').addEventListener('submit', async function(e) {
       e.preventDefault();
       
@@ -581,7 +577,6 @@
       closeAllSheets();
     });
 
-    // --- ABRIR EDIÇÃO ---
     window.openEditSheet = function(firebaseId) {
       currentEditId = firebaseId;
       const exp = expenses.find(e => e.firebaseId === firebaseId);
@@ -615,7 +610,6 @@
       }
     }
 
-    // --- SALVAR EDIÇÃO ---
     document.getElementById('edit-form').addEventListener('submit', async function(e) {
       e.preventDefault();
       
@@ -696,7 +690,6 @@
       }
     }
 
-    // Função auxiliar para calcular a diferença de meses entre duas datas YYYY-MM
     function getMonthDiff(startStr, targetStr) {
        const [sYear, sMonth] = startStr.split('-').map(Number);
        const [tYear, tMonth] = targetStr.split('-').map(Number);
@@ -724,31 +717,26 @@
 
       const selectedMonth = currentMonthValue;
 
-      // FILTRO INTELIGENTE DE RECORRÊNCIA
       let filteredExpenses = [];
       
       expenses.forEach(exp => {
         if (!exp.recurring) {
-          // Gasto normal, só entra se for o mês exato
           if (exp.month === selectedMonth) {
             filteredExpenses.push({...exp, displayDesc: exp.desc});
           }
         } else {
-          // Gasto recorrente, calcula quantos meses se passaram
           const diff = getMonthDiff(exp.month, selectedMonth);
           
-          if (diff >= 0) { // Significa que o mês selecionado é igual ou posterior ao mês de criação
+          if (diff >= 0) {
             if (exp.recurringType === 'sempre') {
                filteredExpenses.push({...exp, displayDesc: exp.desc + ` <span class="tag-recorrente">Fixo</span>`});
             } else if (exp.recurringType === 'meses' && diff < exp.recurringDuration) {
-               // diff = 0 é a parcela 1. Então diff + 1 é a parcela atual.
                filteredExpenses.push({...exp, displayDesc: exp.desc + ` <span class="tag-recorrente">${diff + 1}/${exp.recurringDuration}</span>`});
             }
           }
         }
       });
 
-      // Ordena pelos mais recentes
       filteredExpenses.sort((a, b) => b.timestamp - a.timestamp);
 
       filteredExpenses.forEach((exp) => {
