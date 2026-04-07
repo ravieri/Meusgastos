@@ -181,7 +181,7 @@
     <p>Para finalizar a criação da sua conta, como quer ser chamado e qual a sua renda?</p>
     
     <label class="app-label">Seu Nome</label>
-    <input type="text" id="setup-name" class="app-input" placeholder="Ex: Raul" style="margin-bottom: 15px;" required>
+    <input type="text" id="setup-name" class="app-input" placeholder="Ex: Nome" style="margin-bottom: 15px;" required>
 
     <label class="app-label">Renda Mensal Total (R$)</label>
     <input type="number" id="setup-income" class="app-input" step="0.01" style="margin-bottom: 15px;" required>
@@ -215,7 +215,7 @@
             <button id="prev-month" class="month-nav-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
-            <span id="month-display" class="month-display">Mar 2026</span>
+            <span id="month-display" class="month-display">Mês</span>
             <button id="next-month" class="month-nav-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
             </button>
@@ -464,7 +464,7 @@
     }
 
     // ==========================================
-    // LÓGICA DE BIOMETRIA (WEBAUTHN)
+    // LÓGICA DE BIOMETRIA CORRIGIDA
     // ==========================================
     
     function isWebAuthnSupported() {
@@ -475,8 +475,7 @@
         const bytes = new Uint8Array(buffer);
         let str = '';
         for (let charCode of bytes) str += String.fromCharCode(charCode);
-        const base64String = btoa(str);
-        return base64String.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     }
 
     function base64urlToBuffer(base64url) {
@@ -499,13 +498,17 @@
                 rp: { name: "DailyOS Finance", id: window.location.hostname },
                 user: { id: userId, name: currentUserEmail, displayName: config.name || "Usuário" },
                 pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-                authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                authenticatorSelection: { 
+                    authenticatorAttachment: "platform", // Força o uso do sensor do próprio aparelho
+                    userVerification: "required" 
+                },
                 timeout: 60000,
             };
 
             const credential = await navigator.credentials.create({ publicKey });
-            localStorage.setItem('bio_credential_id', bufferToBase64url(credential.rawId));
-            localStorage.setItem('bio_enabled', 'true');
+            // Vincula a credencial ao ID do usuário para evitar misturar com a conta da Bruna
+            localStorage.setItem(`bio_credential_id_${currentUserUid}`, bufferToBase64url(credential.rawId));
+            localStorage.setItem(`bio_enabled_${currentUserUid}`, 'true');
             return true;
         } catch (e) {
             console.error(e);
@@ -514,10 +517,10 @@
     }
 
     window.verifyBiometrics = async function() {
-        if (!isWebAuthnSupported()) return true; // Libera se o celular não suportar
+        if (!isWebAuthnSupported()) return true; 
         try {
             const challenge = new Uint8Array(32); window.crypto.getRandomValues(challenge);
-            const savedIdStr = localStorage.getItem('bio_credential_id');
+            const savedIdStr = localStorage.getItem(`bio_credential_id_${currentUserUid}`);
             if(!savedIdStr) return false;
             
             const savedId = base64urlToBuffer(savedIdStr);
@@ -525,7 +528,11 @@
             const publicKey = {
                 challenge,
                 rpId: window.location.hostname,
-                allowCredentials: [{ type: "public-key", id: savedId }],
+                allowCredentials: [{ 
+                    type: "public-key", 
+                    id: savedId,
+                    transports: ["internal"] // O SEGREDO ESTÁ AQUI: Diz pro celular usar a digital na hora e não abrir menus confusos!
+                }],
                 userVerification: "required",
                 timeout: 60000,
             };
@@ -538,11 +545,10 @@
         }
     }
 
-    // Controle dos botões de Biometria na tela do Convite
     document.getElementById('btn-accept-bio').addEventListener('click', async () => {
         document.getElementById('bio-sheet').classList.remove('show');
         document.getElementById('overlay').classList.remove('show');
-        localStorage.setItem('bio_asked', 'true');
+        localStorage.setItem(`bio_asked_${currentUserUid}`, 'true');
         
         const success = await registerBiometrics();
         if(success) {
@@ -557,11 +563,10 @@
     document.getElementById('btn-reject-bio').addEventListener('click', () => {
         document.getElementById('bio-sheet').classList.remove('show');
         document.getElementById('overlay').classList.remove('show');
-        localStorage.setItem('bio_asked', 'true');
+        localStorage.setItem(`bio_asked_${currentUserUid}`, 'true');
         showScreen('screen-app');
     });
 
-    // Controle do Switch na aba de Configurações
     document.getElementById('conf-bio-toggle').addEventListener('change', async (e) => {
         if(e.target.checked) {
             const success = await registerBiometrics();
@@ -572,14 +577,14 @@
                 showToast("Biometria ativada com sucesso!", "success");
             }
         } else {
-            localStorage.removeItem('bio_credential_id');
-            localStorage.setItem('bio_enabled', 'false');
+            localStorage.removeItem(`bio_credential_id_${currentUserUid}`);
+            localStorage.setItem(`bio_enabled_${currentUserUid}`, 'false');
             showToast("Biometria desativada.", "success");
         }
     });
 
     // ==========================================
-    // RESTANTE DO APP
+    // RESTANTE DO CÓDIGO
     // ==========================================
 
     const iconEyeOpen = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
@@ -658,10 +663,9 @@
             await loadExpensesFromCloud();
             setupRealtimeListeners(); 
 
-            // Carrega estado do toggle de biometria nas configurações
             if(isWebAuthnSupported()) {
                 document.getElementById('bio-config-container').style.display = 'flex';
-                document.getElementById('conf-bio-toggle').checked = (localStorage.getItem('bio_enabled') === 'true');
+                document.getElementById('conf-bio-toggle').checked = (localStorage.getItem(`bio_enabled_${currentUserUid}`) === 'true');
             }
 
             if (isManualLogin) {
@@ -703,25 +707,22 @@
       }
     });
 
-    // Lógica do botão Continuar na tela de bloqueio
     document.getElementById('btn-continue').addEventListener('click', async () => {
-        const bioEnabled = localStorage.getItem('bio_enabled') === 'true';
-        const bioAsked = localStorage.getItem('bio_asked') === 'true';
+        // Agora lê a memória do dispositivo atrelada a conta exata logada
+        const bioEnabled = localStorage.getItem(`bio_enabled_${currentUserUid}`) === 'true';
+        const bioAsked = localStorage.getItem(`bio_asked_${currentUserUid}`) === 'true';
 
         if (bioEnabled && isWebAuthnSupported()) {
-            // Exige a digital
             const success = await verifyBiometrics();
             if (success) {
                 showScreen('screen-app');
             } else {
-                showToast("Biometria cancelada ou falhou.", "error");
+                showToast("Biometria não reconhecida.", "error");
             }
         } else if (!bioAsked && isWebAuthnSupported()) {
-            // Faz o convite
             document.getElementById('overlay').classList.add('show');
             document.getElementById('bio-sheet').classList.add('show');
         } else {
-            // Passa direto (não configurou bio ou não suporta)
             showScreen('screen-app');
         }
     });
